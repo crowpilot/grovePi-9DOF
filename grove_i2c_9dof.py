@@ -7,7 +7,7 @@ rev = GPIO.RPI_REVISION
 if rev == 2 or rev == 3:
     bus = smbus.SMBus(1)
 else:
-    bus = smbus.SMBus(1)
+    bus = smbus.SMBus(0)
 
 class icm20600:
     
@@ -99,30 +99,52 @@ class icm20600:
     ZA_OFFSET_L = 0x7E
 
     def status(self):
-        if self.read(self.WHO_AM_I) != 0x69:
+        if self.reg_read(self.WHO_AM_I) != 0x11:
+#            print self.reg_read(self.WHO_AM_I)
             return -1
         return 1
 
     def initialize(self):
+        print("initialize")
         self.reg_write(self.CONFIG,0x00)
         self.reg_write(self.FIFO_EN,0x00)
 
         #need def power mode setting
-        self.reg_write(self.PWR_MGMT_1,0x00)
-        self.reg_write(self.PWR_MGMT_2,0x00)
-        #need gyro scale,output rate,average
-        
-        print self.getAccel()
+        pwr1 = 0x00
+        pwr1 = self.reg_read(self.PWR_MGMT_1)&0x8f
+        gyr = self.reg_read(self.LP_MODE_CFG)&0x7f
+        self.reg_write(self.PWR_MGMT_1,pwr1)
+        self.reg_write(self.PWR_MGMT_2,0x07)
+        self.reg_write(self.LP_MODE_CFG,gyr|0x80)
+        #need gyro scale,output rate,average setting
+        gyr_c = self.reg_read(self.GYRO_CONFIG)&0xe7
+        self.reg_write(self.GYRO_CONFIG,gyr_c|0x18)
+        self.reg_write(self.CONFIG,0x01|0xf8)
+        self.reg_write(self.LP_MODE_CFG,0x00|0x8f)
+        #need accel config setting
+        ac_c = self.reg_read(self.ACCEL_CONFIG)&0xe7
+        self.reg_write(self.ACCEL_CONFIG,0x18|ac_c)
+        ac_c2 = self.reg_read(self.ACCEL_CONFIG2)&0xf0
+        self.reg_write(self.ACCEL_CONFIG2,0x07|ac_c2)
+        ac_c2 = self.reg_read(self.ACCEL_CONFIG2)
+        self.reg_write(self.ACCEL_CONFIG2,ac_c2)
 
-    def reg_write(self,data,addr):
+        while 1:
+            time.sleep(1)
+        
+            print self.getAccel()
+
+    def reg_write(self,addr,data):
         bus.write_byte_data(self.ICM20600_ADDR,addr,data)
 
     def reg_read(self,addr):
-        bus.read_byte_data(self.ICM20600_ADDR,addr)
+        print(addr)
+        print(bus.read_byte_data(self.ICM20600_ADDR,addr))
+        return bus.read_byte_data(self.ICM20600_ADDR,addr)
 
     def getAccel(self):
         raw_accel=[0,0,0]
-        raw_accel[0] = self.reg_read(self.ACCEL_XOUT_H)
+        raw_accel[0] = self.reg_read(self.ACCEL_XOUT_L)
         raw_accel[1] = self.reg_read(self.ACCEL_YOUT_H)
         raw_accel[2] = self.reg_read(self.ACCEL_ZOUT_H)
         return raw_accel
@@ -132,5 +154,6 @@ class ak09918:
 
 
 if __name__ == "__main__":
+    icm20600().status()
     icm20600().initialize()
     
