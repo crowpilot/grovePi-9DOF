@@ -108,52 +108,128 @@ class icm20600:
         print("initialize")
         self.reg_write(self.CONFIG,0x00)
         self.reg_write(self.FIFO_EN,0x00)
+        time.sleep(1)
 
         #need def power mode setting
         pwr1 = 0x00
         pwr1 = self.reg_read(self.PWR_MGMT_1)&0x8f
         gyr = self.reg_read(self.LP_MODE_CFG)&0x7f
         self.reg_write(self.PWR_MGMT_1,pwr1)
-        self.reg_write(self.PWR_MGMT_2,0x07)
-        self.reg_write(self.LP_MODE_CFG,gyr|0x80)
+        self.reg_write(self.PWR_MGMT_2,0x00)
+        self.reg_write(self.LP_MODE_CFG,gyr)
         #need gyro scale,output rate,average setting
+        #2kDPS bw176 average 1
         gyr_c = self.reg_read(self.GYRO_CONFIG)&0xe7
         self.reg_write(self.GYRO_CONFIG,gyr_c|0x18)
-        self.reg_write(self.CONFIG,0x01|0xf8)
-        self.reg_write(self.LP_MODE_CFG,0x00|0x8f)
+        conf = self.reg_read(self.CONFIG)&0xf8
+        self.reg_write(self.CONFIG,conf|0x01)
+        lp_c = self.reg_read(self.LP_MODE_CFG)&0x8f
+        self.reg_write(self.LP_MODE_CFG,lp_c|0x00)
         #need accel config setting
-        ac_c = self.reg_read(self.ACCEL_CONFIG)&0xe7
+        #16G 1k420 average4 acc_scale 16000
+        ac_c = self.reg_read(self.ACCEL_CONFIG)&0xE7
+        print(ac_c)
         self.reg_write(self.ACCEL_CONFIG,0x18|ac_c)
         ac_c2 = self.reg_read(self.ACCEL_CONFIG2)&0xf0
         self.reg_write(self.ACCEL_CONFIG2,0x07|ac_c2)
-        ac_c2 = self.reg_read(self.ACCEL_CONFIG2)
+        ac_c2 = self.reg_read(self.ACCEL_CONFIG2)&0xcf
         self.reg_write(self.ACCEL_CONFIG2,ac_c2)
 
-        while 1:
-            time.sleep(1)
-        
-            print self.getAccel()
+    def s8(self,value):
+        return -(value&0b10000000)|(value&0b01111111)
 
+        
     def reg_write(self,addr,data):
         bus.write_byte_data(self.ICM20600_ADDR,addr,data)
 
     def reg_read(self,addr):
-        print(addr)
-        print(bus.read_byte_data(self.ICM20600_ADDR,addr))
+#        print(addr)
         return bus.read_byte_data(self.ICM20600_ADDR,addr)
 
     def getAccel(self):
-        raw_accel=[0,0,0]
-        raw_accel[0] = self.reg_read(self.ACCEL_XOUT_L)
-        raw_accel[1] = self.reg_read(self.ACCEL_YOUT_H)
-        raw_accel[2] = self.reg_read(self.ACCEL_ZOUT_H)
+        raw_accel=[0.0,0.0,0.0]
+        raw_accel[0] = self.s8(self.reg_read(self.ACCEL_XOUT_H))*16/0xff*2
+        raw_accel[1] = self.s8(self.reg_read(self.ACCEL_YOUT_H))*16/0xff*2
+        raw_accel[2] = self.s8(self.reg_read(self.ACCEL_ZOUT_H))*16/0xff*2
         return raw_accel
+
+    def getGyro(self):
+        raw_gyro = [0,0,0]
+        raw_gyro[0] = self.s8(self.reg_read(self.GYRO_XOUT_H))/0xff*2*2000
+        raw_gyro[1] = self.s8(self.reg_read(self.GYRO_YOUT_H))/0xff*2*2000
+        raw_gyro[2] = self.s8(self.reg_read(self.GYRO_ZOUT_H))/0xff*2*2000
+        return raw_gyro
 
 class ak09918:
     AK09918_ADDR = 0x0C
+    WIA1 = 0x00
+    WIA2 = 0x01
+    RAV1 = 0x02
+    RSV2 = 0x03
+    ST1 = 0x10
+    HXL = 0x11
+    HXH = 0x12
+    HYL = 0x13
+    HYH = 0x14
+    HZL = 0x15
+    HZH = 0x16
+    TMPS = 0x17
+    ST2 = 0x18
+    CNTL1 = 0x30
+    CNTL2 = 0x31
+    CNTL3 = 0x32
+    TS1 = 0x33
+    TS2 = 0x34
+
+    def initialize(self):
+        self.reg_write(self.CNTL3,0x01)
+        print(self.reg_read(self.ST1))
+        self.reg_write(self.CNTL2,0x08)
+
+        print(self.reg_read(self.ST1))
+        print(self.reg_read(self.CNTL2))
+        
+    def reg_write(self,addr,data):
+        bus.write_byte_data(self.AK09918_ADDR,addr,data)
+
+    def reg_read(self,addr):
+#        print(addr)
+        return bus.read_byte_data(self.AK09918_ADDR,addr)
+
+    def getMagAxis(self):
+        self.reg_write(self.CNTL3,0x01)
+        self.reg_write(self.CNTL2,0x08)
+        while 1:
+            if self.reg_read(self.ST1):
+                break
+            
+        mag_axis = [0,0,0]
+        mag_axis[0] = self.reg_read(self.HXL)
+        mag_axis[1] = self.reg_read(self.HYL)
+        mag_axis[2] = self.reg_read(self.HZL)
+        return mag_axis
+        
+
+def getAccel():
+    return icm20600().getAccel()
+
+def getGyro():
+    return icm20600().getGyro()
+
+def initialize():
+    icm20600().initialize()
+    return
+
+
 
 
 if __name__ == "__main__":
     icm20600().status()
     icm20600().initialize()
+    ak09918().initialize()
+    while 1:
+        print(getAccel())
+        print(getGyro())
+        print(ak09918().getMagAxis())
+        time.sleep(1)
     
